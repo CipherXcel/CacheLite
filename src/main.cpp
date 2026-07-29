@@ -799,7 +799,7 @@ void printHelp() {
 }
 
 int main() {
-    cout << "CacheLite v13.0 started.\n";
+    cout << "CacheLite v12.1 started.\n";
 
     size_t initialCapacity = readInitialCapacity();
 
