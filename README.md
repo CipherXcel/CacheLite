@@ -2,7 +2,7 @@
 
 CacheLite is a CLI-based in-memory key-value store built in C++.
 
-It supports basic key-value operations, TTL expiry, fixed-capacity LRU eviction, safe file persistence, cache statistics, and optimized expired-key cleanup.
+It supports basic key-value operations, TTL expiry, configurable LRU and LFU eviction policies, dynamic policy switching, and memory inspection, safe file persistence, cache statistics, and optimized expired-key cleanup.
 
 ---
 
@@ -10,7 +10,10 @@ It supports basic key-value operations, TTL expiry, fixed-capacity LRU eviction,
 
 - Basic key-value commands: `SET`, `GET`, `DELETE`, `EXISTS`, `KEYS`
 - Fixed cache capacity selected at startup
-- LRU eviction when cache capacity is full
+- LRU & LFU eviction when cache capacity is full
+- Configurable eviction policies: LRU (Least Recently Used) and LFU (Least Frequently Used)
+- Dynamic runtime policy switching via POLICY [LRU|LFU]
+- Raw memory inspection command INSPECT
 - TTL support with lazy expiry
 - Optimized TTL cleanup using an expiry index
 - Save and load cache data from files
@@ -63,6 +66,13 @@ The least recently used key is kept at the back.
 When capacity is full, the key at the back is evicted.
 
 ---
+### 3. Frequency Map Buckets (LFU Tracking)
+
+```cpp
+unordered_map<int, list<string>> freqMap;
+int minFreq = 1;
+Maps frequency counts to doubly-linked lists of keys to allow average O(1) LFU eviction by tracking the active minFreq level.
+```
 
 ### 3. Expiry Index
 
@@ -128,17 +138,23 @@ EXPIRE temp 20
 
 ---
 
-### Cache Inspection Commands
+### Cache Inspection & Policy Commands
 
 ```text
 STATS
 LRU
+POLICY [LRU|LFU]
+INSPECT
 CAPACITY
 ```
 
 `STATS` prints cache statistics.
 
 `LRU` prints keys from most recently used to least recently used.
+
+`POLICY [LRU|LFU]` switches between LRU and LFU eviction modes at runtime.
+
+`INSPECT` prints stored keys, values, and access frequencies.
 
 `CAPACITY` shows fixed capacity, current key count, and available slots.
 
@@ -204,46 +220,70 @@ Run on Windows PowerShell:
 ```text
 CacheLite v12.1 started.
 Enter cache capacity (positive integer, default 3): 3
-Cache capacity set to 3 keys.
+Cache capacity set to 3 keys. Default Policy: LRU.
 Type HELP to see all available commands.
 
-> SET a 100
+> SET user1 Priyanshu
 OK
 
-> SET b 200
+> SET user2 Ritesh
 OK
 
-> GET a
-100
-
-> SETEX temp 500 10
+> SETEX token_temp 9999 10
 OK
 
-> TTL temp
+> GET user1
+Priyanshu
+
+> GET user1
+Priyanshu
+
+> TTL token_temp
 8
 
-> LRU
-Most recent -> least recent:
-temp a b
+> INSPECT
+Active Policy: LRU
+--- Memory Inspection ---
+Key: user1 | Value: Priyanshu | Frequency: 3
+Key: user2 | Value: Ritesh | Frequency: 1
+Key: token_temp | Value: 9999 | Frequency: 1
 
-> CAPACITY
+> POLICY LFU
+Policy switched to LFU
+
+> SET user3 Aditya
+OK
+
+> KEYS
+user1
+user3
+token_temp
+
+> STATS
+Active Eviction Policy: LFU
 Capacity: 3
-Current keys: 3
-Available slots: 0
+Total keys: 3
+Cache hits: 2
+Cache misses: 0
+SET operations: 4
+GET operations: 2
+DELETE operations: 0
+Expired keys: 0
+Evicted keys: 1
 
-> SAVE data/cache.txt
+> SAVE data/session.txt
 Saved
 
 > CLEAR
 Cleared 3 keys
 
-> LOAD data/cache.txt
+> LOAD data/session.txt
 Loaded
 
 > KEYS
-a
-b
-temp
+user1
+user3
+token_temp
 
 > EXIT
 Bye!
@@ -273,7 +313,7 @@ The user must restart CacheLite and choose a new capacity at startup.
 
 ---
 
-### LRU Eviction
+### Dual Eviction Engine (LRU + LFU)
 
 CacheLite uses LRU eviction when the cache is full.
 
@@ -399,6 +439,9 @@ Completed features:
 - Expiry index optimization
 - EOF-safe input handling
 - Reduced redundant hash map lookups
+- Configurable LRU & LFU eviction algorithms ($O(1)$)
+- Runtime policy switching (POLICY)
+- Memory inspection (INSPECT)
 
 ---
 
